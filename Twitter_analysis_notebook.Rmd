@@ -1,0 +1,144 @@
+---
+title: "Twitter Sentiment Analysis using R"
+output:
+  html_notebook: default
+  html_document: default
+---
+Loading packages for accessing Twitter API :
+```{r}
+library(twitteR)
+library(ROAuth)
+library(stringr)
+library(dplyr)
+```
+Using the Keys and Tokens for accessing the twitter API:
+
+Note: An error will show up below as I have used "XXXXX" instead of my actual keys for security reasons. Using the right keys will generate the expected output.
+```{r}
+curl.cert <- download.file(url="http://curl.haxx.se/ca/cacert.pem",destfile="cacert.pem")
+
+
+requestURL <- "https://api.twitter.com/oauth/request_token"
+accessURL <- "https://api.twitter.com/oauth/access_token"
+authURL <- "https://api.twitter.com/oauth/authorize"
+
+ConsumerKey <- "XXXXX" 
+ConsumerSecret <- "XXXXX"
+AccessToken <- 	"XXXXX"
+AccessTokenSecret <- 	"XXXXX"
+
+setup_twitter_oauth(ConsumerKey, ConsumerSecret, AccessToken, AccessTokenSecret)
+```
+Importing Tweets about Game Of Thrones from Twitter API :
+```{r}
+GOT <- searchTwitter("#GameOfThrones", n = 1000, lang = 'en')
+head(GOT)
+```
+Importing libraries for Text Mining :
+```{r}
+library(wordcloud)
+library(SnowballC)
+library(tm)
+```
+Cleaning the text and obtaining relevant data :
+```{r}
+GOT_txt <- sapply(GOT, function(x) x$getText())
+GOT_lst <- lapply(GOT, function(x) x$getText())
+
+GOT_txt_Corpus <- Corpus(VectorSource(GOT_txt))
+
+removeURL <- function(x) 
+  gsub(" ?(f|ht)(tp)(s?)(://)(.*)[.|/](.*)", " ", x)
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, content_transformer(removeURL))
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, removePunctuation)
+removextra <- function(x)
+  gsub("[^[:graph:]]", " ", x)
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, content_transformer(removextra))
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, removeWords,  c(stopwords()))
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, removeWords, c("RT", "the"))
+
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, content_transformer(tolower))
+GOT_txt_Corpus <- tm_map(GOT_txt_Corpus, removeWords, c("https"))
+
+GOT_x <- TermDocumentMatrix(GOT_txt_Corpus)
+GOT_x <- as.matrix(GOT_x)
+GOT_x <- sort(rowSums(GOT_x), decreasing = TRUE)
+GOT_x <- data.frame(word = names(GOT_x), freq = GOT_x)
+```
+Visualizing the most used words :
+```{r}
+barplot(GOT_x[1:10,]$freq,las =2, names.arg = GOT_x[1:10,]$word)
+```
+Making a WordCloud out of all the Frequaently used words :
+```{r}
+set.seed(1234)
+wordcloud(GOT_txt_Corpus, min.freq = 1, max.words = 80, scale = c(2.2,1), colors =brewer.pal(8, "Dark2"), random.color = TRUE, random.order = FALSE)
+```
+Importing files containg positive and negative words :
+```{r}
+pos.words <- read.csv("g:/datasets/positive_words.csv")
+neg.words <- read.csv("g:/datasets/negative_words.csv")
+
+pos.words <- scan("g:/datasets/positive_words.csv", what = 'character', comment.char = ";")
+neg.words <- scan("g:/datasets/negative_words.csv", what = 'character', comment.char = ";")
+```
+Function for matching the words in the tweets to the positive and negative terms :
+```{r}
+score.sentiment = function(tweets, pos.words, neg.words)
+  
+{
+  
+  require(plyr)
+  require(stringr)
+  
+  scores = laply(tweets, function(tweet, pos.words, neg.words) {
+    
+    
+    
+    tweet = gsub('https://','',tweet) # removes https://
+    tweet = gsub('http://','',tweet) # removes http://
+    tweet=gsub('[^[:graph:]]', ' ',tweet) ## removes graphic characters 
+    tweet = gsub('[[:punct:]]', '', tweet) # removes punctuation 
+    tweet = gsub('[[:cntrl:]]', '', tweet) # removes control characters
+    tweet = gsub('\\d+', '', tweet) # removes numbers
+    tweet=str_replace_all(tweet,"[^[:graph:]]", " ") 
+    
+    tweet = tolower(tweet) # makes all letters lowercase
+    
+    word.list = str_split(tweet, '\\s+') # splits the tweets by word in a list
+    
+    words = unlist(word.list) # turns the list into vector
+    
+    pos.matches = match(words, pos.words) ## returns matching 
+    #values for words from list 
+    neg.matches = match(words, neg.words)
+    
+    pos.matches = !is.na(pos.matches) ## converts matching values to true of false
+    neg.matches = !is.na(neg.matches)
+    
+    score = sum(pos.matches) - sum(neg.matches) # true and false are 
+    #treated as 1 and 0 so they can be added
+    
+    return(score)
+    
+  }, pos.words, neg.words )
+  
+  scores.df = data.frame(score=scores, text=tweets)
+  
+  return(scores.df)
+  
+}
+```
+Running the above function for tweets analysis :
+```{r}
+result <- score.sentiment(GOT_lst, pos.words, neg.words)
+```
+Histogram of the tweets scores :
+```{r}
+hist(result$score)
+```
+
+
+Conclusion: Thus it is noticed that most of the tweets about Game of Thrones are Neutral tweets. It is also noticed that the there are slightly more postive tweets when compared the the negative tweets.
+
+This program can be easily modified to perform a sentiment analysis on any other term or word.
