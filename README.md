@@ -5,13 +5,11 @@ I have shared the code for these projects to demonstate the work I've done and a
 
 I've used concepts such as:
 
-1.K-Nearest Neighbors algorithm
+1.K-Nearest Neighbors algorithm (Knn)
 
-2.Deep Learning
+2.Logistic Regression
 
-3.Bayes algorithm
-
-4.Linear Regression
+3.Linear Regression
 
 One of the projects I've published to this repository is based on Sentiment Analysis on Twitter which imports current data from Twitter's API for analysis. It can analyse the positivity and negativity of the tweets about a specific term or a word.
 
